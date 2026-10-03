@@ -1,164 +1,179 @@
 # ComplanX
 
-> Your complaint. AI analyzed. Right authority notified.
-
-ComplanX is an AI-powered complaint analysis and authority-routing platform. A user submits a complaint, the AI classifies it, identifies the right authority, generates a professional email, and sends it after human approval.
+An AI-powered civic complaint management platform for India. Citizens email their complaints, ComplanX automatically classifies them, routes them to the right government authority, and tracks the entire lifecycle.
 
 ---
 
-## Architecture
+## How it works
 
-```mermaid
-graph TD
-    A[User / Email Simulator] -->|POST /api/dev/simulate-email| B[Express Backend]
-    B --> C[Complaint Created]
-    C --> D[AI Analysis - OpenAI / Mock]
-    D --> E[Authority Router]
-    E --> F[Email Generator]
-    F --> G[READY_TO_SEND]
-    G --> H[Human Approval UI]
-    H -->|POST /api/complaints/:id/send| I[Email Provider]
-    I --> J[MockEmailProvider]
-    J --> K[SENT + Timeline Updated]
-```
+1. A complaint arrives via email (or the web form / simulator)
+2. A two-step AI pipeline classifies it — keyword matching first, then Gemini enrichment
+3. The system finds the correct authority by city → state → category fallback
+4. The complaint is forwarded to that authority (auto or manual)
+5. The full status lifecycle is tracked: `RECEIVED → ANALYZING → READY_TO_SEND → SENT → RESOLVED`
 
 ---
 
-## Tech Stack
+## Features
 
-| Layer    | Tech                                      |
-|----------|-------------------------------------------|
-| Frontend | React, Vite, TypeScript, Tailwind CSS     |
-| Backend  | Node.js, Express, TypeScript, Prisma      |
-| Database | PostgreSQL                                |
-| AI       | OpenAI GPT-4o-mini (mock fallback)        |
-| Email    | MockEmailProvider (pluggable interface)   |
-| Auth     | JWT + bcrypt                              |
-
----
-
-## Project Structure
-
-```
-complanx/
-├── client/          # React frontend
-├── server/
-│   ├── src/
-│   │   ├── controllers/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   │   ├── ai/          # AI analysis (isolated)
-│   │   │   ├── email/       # Email provider interface
-│   │   │   ├── authority/   # Authority routing
-│   │   │   └── complaint/   # Complaint business logic
-│   │   ├── middleware/
-│   │   └── server.ts
-│   └── prisma/
-│       ├── schema.prisma
-│       └── seed.ts
-├── .env
-└── package.json
-```
+- **AI classification** — two-step pipeline: fast keyword matching (English + Hindi + Hinglish) backed by Gemini 1.5 Flash enrichment
+- **8 civic categories** — waste, roads, street lighting, water supply, electricity, traffic, sewerage, public infrastructure
+- **Gmail IMAP poller** — polls a configured inbox, deduplicates by message ID, skips system senders
+- **Authority routing** — city-first, state-fallback, category-aware matching from the authorities DB
+- **Auto-send toggle** — send to authority automatically or queue for manual review
+- **Email simulator** — dev tool to inject fake complaints without needing a live inbox
+- **Admin panel** — manage authorities, view all complaints, trigger analysis manually
+- **Role-based access** — `USER` and `ADMIN` roles with protected routes
+- **Full status history** — every status transition is timestamped and stored
 
 ---
 
-## Quick Start
+## Tech stack
 
-### 1. Prerequisites
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query |
+| Backend | Node.js, Express, TypeScript, tsx |
+| Database | MongoDB + Mongoose |
+| AI | Google Gemini 1.5 Flash (`@google/generative-ai`) |
+| Email | Nodemailer (SMTP) + ImapFlow (IMAP polling) |
+| Auth | JWT + bcrypt |
+| Validation | Zod |
 
-- Node.js 18+
-- PostgreSQL running locally
+---
 
-### 2. Install dependencies
+## Getting started
+
+### Prerequisites
+
+- Node.js 20+
+- MongoDB running locally (or a MongoDB Atlas URI)
+- A Google Gemini API key (optional — falls back to keyword-only mode)
+
+### Install
 
 ```bash
-npm install
-npm install --prefix client
-npm install --prefix server
+npm run install:all
 ```
 
-### 3. Set up environment
+### Configure
 
-```bash
-cp .env.example .env
-# Edit .env — set DATABASE_URL, optionally set OPENAI_API_KEY
+Copy `.env.example` to `.env` and fill in your values:
+
+```env
+PORT=5000
+MONGODB_URI="mongodb://localhost:27017/complanx"
+JWT_SECRET="your-secret-here"
+GEMINI_API_KEY=""          # optional — keyword mode used if blank
+EMAIL_PROVIDER="mock"      # "mock" or "gmail"
+NODE_ENV="development"
 ```
 
-### 4. Set up database
-
-```bash
-npm run db:migrate    # runs prisma migrate dev
-npm run db:seed       # seeds demo users + authorities
+```env
+# client/.env
+VITE_API_URL="http://localhost:5000/api"
 ```
 
-### 5. Run
+### Run
 
 ```bash
 npm run dev
 ```
 
-- Frontend: http://localhost:5173
-- Backend:  http://localhost:5000
+Server → `http://localhost:5000`  
+Client → `http://localhost:5173`
 
----
+### Seed the database
 
-## Demo Credentials
-
-| Role  | Email                  | Password   |
-|-------|------------------------|------------|
-| User  | demo@complanx.app      | Demo@1234  |
-| Admin | admin@complanx.app     | Demo@1234  |
-
----
-
-## OpenAI Setup
-
-Add your key to `.env`:
-
-```
-OPENAI_API_KEY=sk-...
+```bash
+npm run db:seed
 ```
 
-If the key is not set, ComplanX uses a built-in mock analyzer that classifies complaints using keyword matching. The app is fully functional without an OpenAI key.
+This creates an admin user and sample authorities across Indian cities.
 
 ---
 
-## Hackathon Demo (2 min)
+## Project structure
 
-1. Open http://localhost:5173
-2. Log in as `demo@complanx.app` / `Demo@1234`
-3. Go to **Email Simulator**
-4. Click **Garbage** quick example, then **Simulate Incoming Email**
-5. Watch the AI analysis result — category, location, confidence
-6. See the recommended authority and generated email
-7. Click **Approve & Send**
-8. See the complaint timeline: Received → Analyzed → Sent
-
----
-
-## Email Provider Architecture
-
-The email system uses a pluggable interface:
-
-```ts
-interface EmailProvider {
-  sendEmail(data: SendEmailData): Promise<EmailResult>;
-}
+```
+complanx/
+├── client/                  # React frontend
+│   └── src/
+│       ├── api/             # Axios API clients
+│       ├── components/      # Shared UI components
+│       ├── pages/           # Route-level pages
+│       ├── hooks/           # useAuth and other hooks
+│       └── types/           # Shared TypeScript types
+│
+└── server/                  # Express backend
+    └── src/
+        ├── controllers/     # Route handlers
+        ├── models/          # Mongoose schemas
+        ├── routes/          # Express routers
+        ├── middleware/       # Auth, error handler
+        ├── services/
+        │   ├── ai/          # Gemini + keyword analyzer
+        │   ├── email/       # IMAP poller, SMTP sender, mock provider
+        │   ├── complaint/   # Core complaint service
+        │   └── authority/   # Authority routing logic
+        ├── validators/      # Zod schemas
+        └── scripts/         # One-off utility scripts
 ```
 
-Current: `MockEmailProvider` — stores in DB, logs to console.
+---
 
-To add Gmail/SMTP/Resend later, implement the interface and register in `emailProviderFactory.ts`. Zero changes to business logic.
+## API overview
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/auth/register` | Register a new user |
+| POST | `/api/auth/login` | Login, receive JWT |
+| GET | `/api/complaints` | List complaints (paginated) |
+| POST | `/api/complaints` | Submit a new complaint |
+| GET | `/api/complaints/:id` | Get complaint detail |
+| POST | `/api/complaints/:id/analyze` | Trigger AI analysis |
+| POST | `/api/complaints/:id/send` | Forward to authority |
+| GET | `/api/authorities` | List authorities |
+| GET | `/api/settings` | Get app settings |
+| PUT | `/api/settings` | Update settings (admin) |
+| POST | `/api/dev/simulate-email` | Inject a test complaint (dev only) |
 
 ---
 
-## Future Improvements
+## Gmail integration
 
-- Real Gmail inbox integration via OAuth
-- Automatic email ingestion from complaints@complanx.app
-- WhatsApp / SMS notification
-- Multi-language (Hindi/Punjabi) support
-- Duplicate complaint detection
-- Authority portal for status updates
-- SLA tracking and escalation
-- Mobile app
+1. Enable IMAP on your Gmail account
+2. Generate a [Google App Password](https://myaccount.google.com/apppasswords)
+3. Go to Settings in the app and enter your Gmail credentials
+4. Toggle Gmail on — the IMAP poller starts automatically
+
+The poller checks for unseen emails on a configurable interval, processes each one through the AI pipeline, and marks them as seen.
+
+---
+
+## Complaint categories
+
+| Category | Authority type |
+|---|---|
+| Waste management | Municipal Corporation |
+| Road damage | Public Works Department |
+| Street lighting | Municipal Corporation |
+| Water supply | State Department |
+| Electricity | Utility Company |
+| Traffic | Traffic Department |
+| Sewerage | Municipal Corporation |
+| Public infrastructure | Municipal Corporation |
+
+---
+
+## Environment variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `PORT` | Server port | `5000` |
+| `MONGODB_URI` | MongoDB connection string | required |
+| `JWT_SECRET` | JWT signing secret | required |
+| `GEMINI_API_KEY` | Google Gemini API key | optional |
+| `EMAIL_PROVIDER` | `mock` or `gmail` | `mock` |
+| `NODE_ENV` | `development` or `production` | `development` |
+| `VITE_API_URL` | Backend URL for the client | `http://localhost:5000/api` |
